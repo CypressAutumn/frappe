@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
 # MIT License. See license.txt
 
@@ -534,6 +535,10 @@ def money_in_words(number, main_currency = None, fraction_currency=None):
 	if number < 0:
 		return ""
 
+	if frappe.local.lang == 'zh':
+		from .num2ch import cnumber
+		return  '%s %s' %(main_currency or '', cnumber().cwchange(str(number)))
+
 	d = get_defaults()
 	if not main_currency:
 		main_currency = d.get('currency', 'INR')
@@ -567,12 +572,8 @@ def money_in_words(number, main_currency = None, fraction_currency=None):
 		out = main_currency + ' ' + _(in_words(main, in_million).title())
 		if cint(fraction):
 			out = out + ' ' + _('and') + ' ' + _(in_words(fraction, in_million).title()) + ' ' + fraction_currency
-
 	return out + ' ' + _('only.')
 
-#
-# convert number to words
-#
 def in_words(integer, in_million=True):
 	"""
 	Returns string in words for the given integer.
@@ -714,10 +715,9 @@ def get_url(uri=None, full_address=False):
 		return uri
 
 	if not host_name:
-		request_host_name = get_host_name_from_request()
-
-		if request_host_name:
-			host_name = request_host_name
+		if hasattr(frappe.local, "request") and frappe.local.request and frappe.local.request.host:
+			protocol = 'https://' if 'https' == frappe.get_request_header('X-Forwarded-Proto', "") else 'http://'
+			host_name = protocol + frappe.local.request.host
 
 		elif frappe.local.site:
 			protocol = 'http://'
@@ -747,17 +747,13 @@ def get_url(uri=None, full_address=False):
 
 	port = frappe.conf.http_port or frappe.conf.webserver_port
 
-	if not (frappe.conf.restart_supervisor_on_update or frappe.conf.restart_systemd_on_update) and host_name and not url_contains_port(host_name) and port:
+	#if not (frappe.conf.restart_supervisor_on_update or frappe.conf.restart_systemd_on_update) and host_name and not url_contains_port(host_name) and port:
+	if  host_name and not url_contains_port(host_name) and port:
 		host_name = host_name + ':' + str(port)
 
 	url = urljoin(host_name, uri) if uri else host_name
 
 	return url
-
-def get_host_name_from_request():
-	if hasattr(frappe.local, "request") and frappe.local.request and frappe.local.request.host:
-		protocol = 'https://' if 'https' == frappe.get_request_header('X-Forwarded-Proto', "") else 'http://'
-		return protocol + frappe.local.request.host
 
 def url_contains_port(url):
 	parts = url.split(':')
