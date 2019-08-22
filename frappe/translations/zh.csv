@@ -3072,7 +3072,7 @@ DocType: Auto Repeat,Weekly,每周
 DocType: SMS Settings,Eg. smsgateway.com/api/send_sms.cgi,例如：smsgateway.com/API/send_sms.cgi
 DocType: Communication,In Reply To,在回答
 DocType: DocType,Allow Import (via Data Import Tool),允许导入（通过数据导入工具）
-apps/frappe/frappe/templates/print_formats/standard_macros.html +39,Sr,锶
+apps/frappe/frappe/templates/print_formats/standard_macros.html +39,Sr,序号
 DocType: DocField,Float,浮点数
 DocType: Print Settings,Page Settings,页面设置
 apps/frappe/frappe/public/js/frappe/form/quick_entry.js +137,Saving...,保存...
