@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
 # MIT License. See license.txt
 
@@ -35,8 +36,8 @@ def getdate(string_date=None):
 	elif isinstance(string_date, datetime.date):
 		return string_date
 
-	# dateutil parser does not agree with dates like 0000-00-00
-	if not string_date or string_date=="0000-00-00":
+	# dateutil parser does not agree with dates like 0001-01-01
+	if not string_date or string_date=="0001-01-01":
 		return None
 	return parser.parse(string_date).date()
 
@@ -53,8 +54,8 @@ def get_datetime(datetime_str=None):
 	elif isinstance(datetime_str, datetime.date):
 		return datetime.datetime.combine(datetime_str, datetime.time())
 
-	# dateutil parser does not agree with dates like 0000-00-00
-	if not datetime_str or (datetime_str or "").startswith("0000-00-00"):
+	# dateutil parser does not agree with dates like 0001-01-01
+	if not datetime_str or (datetime_str or "").startswith("0001-01-01"):
 		return None
 
 	try:
@@ -70,7 +71,7 @@ def to_timedelta(time_str):
 	else:
 		return time_str
 
-def add_to_date(date, years=0, months=0, days=0, hours=0, minutes=0, seconds=0, as_string=False, as_datetime=False):
+def add_to_date(date, years=0, months=0, weeks=0, days=0, hours=0, minutes=0, seconds=0, as_string=False, as_datetime=False):
 	"""Adds `days` to the given date"""
 	from dateutil.relativedelta import relativedelta
 
@@ -86,7 +87,7 @@ def add_to_date(date, years=0, months=0, days=0, hours=0, minutes=0, seconds=0, 
 			as_datetime = True
 		date = parser.parse(date)
 
-	date = date + relativedelta(years=years, months=months, days=days, hours=hours, minutes=minutes, seconds=seconds)
+	date = date + relativedelta(years=years, months=months, weeks=weeks, days=days, hours=hours, minutes=minutes, seconds=seconds)
 
 	if as_string:
 		if as_datetime:
@@ -182,6 +183,9 @@ def get_first_day(dt, d_years=0, d_months=0):
 
 	return datetime.date(year, month + 1, 1)
 
+def get_first_day_of_week(dt):
+	return dt - datetime.timedelta(days=dt.weekday())
+
 def get_last_day(dt):
 	"""
 	 Returns last day of the month using:
@@ -257,6 +261,15 @@ def format_datetime(datetime_string, format_string=None):
 	except UnknownLocaleError:
 		formatted_datetime = datetime.strftime('%Y-%m-%d %H:%M:%S')
 	return formatted_datetime
+
+def get_weekdays():
+	return ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+def get_weekday(datetime=None):
+	if not datetime:
+		datetime = now_datetime()
+	weekdays = get_weekdays()
+	return weekdays[datetime.weekday()]
 
 def global_date_format(date, format="long"):
 	"""returns localized date in the form of January 1, 2012"""
@@ -522,6 +535,10 @@ def money_in_words(number, main_currency = None, fraction_currency=None):
 	if number < 0:
 		return ""
 
+	if frappe.local.lang == 'zh':
+		from .num2ch import cnumber
+		return  '%s %s' %(main_currency or '', cnumber().cwchange(str(number)))
+
 	d = get_defaults()
 	if not main_currency:
 		main_currency = d.get('currency', 'INR')
@@ -555,12 +572,8 @@ def money_in_words(number, main_currency = None, fraction_currency=None):
 		out = main_currency + ' ' + _(in_words(main, in_million).title())
 		if cint(fraction):
 			out = out + ' ' + _('and') + ' ' + _(in_words(fraction, in_million).title()) + ' ' + fraction_currency
-
 	return out + ' ' + _('only.')
 
-#
-# convert number to words
-#
 def in_words(integer, in_million=True):
 	"""
 	Returns string in words for the given integer.
@@ -734,7 +747,8 @@ def get_url(uri=None, full_address=False):
 
 	port = frappe.conf.http_port or frappe.conf.webserver_port
 
-	if not (frappe.conf.restart_supervisor_on_update or frappe.conf.restart_systemd_on_update) and host_name and not url_contains_port(host_name) and port:
+	#if not (frappe.conf.restart_supervisor_on_update or frappe.conf.restart_systemd_on_update) and host_name and not url_contains_port(host_name) and port:
+	if  host_name and not url_contains_port(host_name) and port:
 		host_name = host_name + ':' + str(port)
 
 	url = urljoin(host_name, uri) if uri else host_name
@@ -753,6 +767,24 @@ def get_link_to_form(doctype, name, label=None):
 
 	return """<a href="{0}">{1}</a>""".format(get_url_to_form(doctype, name), label)
 
+def get_link_to_report(name, label=None, report_type=None, doctype=None, filters=None):
+	if not label: label = name
+
+	if filters:
+		conditions = []
+		for k,v in iteritems(filters):
+			if isinstance(v, list):
+				for value in v:
+					conditions.append(str(k)+'='+'["'+str(value[0]+'"'+','+'"'+str(value[1])+'"]'))
+			else:
+				conditions.append(str(k)+"="+str(v))
+
+		filters = "&".join(conditions)
+
+		return """<a href='{0}'>{1}</a>""".format(get_url_to_report_with_filters(name, filters, report_type, doctype), label)
+	else:
+		return """<a href='{0}'>{1}</a>""".format(get_url_to_report(name, report_type, doctype), label)
+
 def get_absolute_url(doctype, name):
 	return "desk#Form/{0}/{1}".format(quoted(doctype), quoted(name))
 
@@ -767,6 +799,12 @@ def get_url_to_report(name, report_type = None, doctype = None):
 		return get_url(uri = "desk#Report/{0}/{1}".format(quoted(doctype), quoted(name)))
 	else:
 		return get_url(uri = "desk#query-report/{0}".format(quoted(name)))
+
+def get_url_to_report_with_filters(name, filters, report_type = None, doctype = None):
+	if report_type == "Report Builder":
+		return get_url(uri = "desk#Report/{0}?{1}".format(quoted(doctype), filters))
+	else:
+		return get_url(uri = "desk#query-report/{0}?{1}".format(quoted(name), filters))
 
 operator_map = {
 	# startswith
@@ -845,9 +883,8 @@ def get_filter(doctype, f):
 		# if operator is missing
 		f.operator = "="
 
-	valid_operators = ("=", "!=", ">", "<", ">=", "<=", "like", "not like", "in", "not in",
-		"between", "descendants of", "ancestors of", "not descendants of", "not ancestors of", "is")
-
+	valid_operators = ("=", "!=", ">", "<", ">=", "<=", "like", "not like", "in", "not in", "is",
+		"between", "descendants of", "ancestors of", "not descendants of", "not ancestors of", "previous", "next")
 	if f.operator.lower() not in valid_operators:
 		frappe.throw(frappe._("Operator must be one of {0}").format(", ".join(valid_operators)))
 
@@ -961,7 +998,7 @@ def strip(val, chars=None):
 def to_markdown(html):
 	text = None
 	try:
-		text = html2text(html)
+		text = html2text(html or '')
 	except HTMLParser.HTMLParseError:
 		pass
 
@@ -981,7 +1018,7 @@ def md_to_html(markdown_text):
 
 	html = None
 	try:
-		html = markdown(markdown_text, extras=extras)
+		html = markdown(markdown_text or '', extras=extras)
 	except MarkdownError:
 		pass
 
